@@ -7,8 +7,10 @@ import getLANIP from "./utils/get_lan_ip.js";
 
 const app = express();
 
+
 app.use(cors());
 app.use(morgan("dev"));
+app.use(express.json())
 
 const PORT = process.env.PORT;
 
