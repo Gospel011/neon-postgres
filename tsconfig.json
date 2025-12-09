@@ -1,11 +1,17 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "extends": "@tsconfig/node22/tsconfig.json",
   "include": ["src/**/*.ts"],
   "exclude": ["dist"],
   "compilerOptions": {
-    // File Layout
     "rootDir": "./src",
-    "outDir": "./dist"
+    "outDir": "./dist",
+
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"],
+      "@lib/*": ["lib/*"],
+      "@controllers/*": ["controllers/*"],
+      "@db/*": ["db/*"]
+    }
   }
 }
