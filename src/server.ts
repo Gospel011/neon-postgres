@@ -5,7 +5,7 @@ import "dotenv/config";
 import { Request, Response } from "express-serve-static-core";
 import getLANIP from "./utils/get_lan_ip.js";
 import db from "./db/db.js";
-import { posts, users } from "./schema/schema.js";
+import { users } from "./schema/schema.js";
 import { eq, getTableColumns, sql } from "drizzle-orm";
 // import db from "@db/db.js";
 
@@ -22,16 +22,35 @@ app
   .get(
     async (
       req: Request,
-      res: Response<ApiResponse<{ posts?: any; users?: any }>>
+      res: Response<
+        ApiResponse<{ posts?: any; results?: number | null; users?: any }>
+      >,
     ) => {
-      const { page } = req.query;
+      const { page, lat, lng } = req.query;
       const limit = 5;
       const offset = (Math.max(Number(page ?? 1), 1) - 1) * limit;
 
       // const dbUsers = await db.select().from(users);
-      const dbUsers = await db.query.users.findMany({
-        with: { preferences: true },
-      });
+      // const hasValidCoordinates = !isNaN(Number(lat)) && !isNaN(Number(lng));
+      const dbUsers = await db.execute<User>(
+        sql`
+        SELECT 
+          id,
+          name,
+          email,
+          age,
+          ST_Y(location::geometry) as lat,
+          ST_X(location::geometry) as lng
+        FROM
+          users
+        WHERE
+          ST_DWithin(
+            location,
+            ST_SetSRID(ST_MakePoint(${Number(lng)}, ${Number(lat)}), 4326)::geography,
+            ${50 * 1000}
+          )
+        `,
+      );
 
       try {
         //   ).rows;
@@ -39,25 +58,42 @@ app
         res.json({
           status: "success",
           message: "Application is live",
-          data: { users: dbUsers },
+          data: { results: dbUsers.rowCount, users: dbUsers.rows },
         });
       } catch (error) {
         console.error({ error });
         res.json({ status: "failed", message: (error as Error).message });
       }
-    }
+    },
   )
   .post(
     async (
-      req: Request<any, any, { name?: string; email?: string; age?: string }>,
-      res: Response<ApiResponse<{ user?: any; error?: any }>>
+      req: Request<
+        any,
+        any,
+        {
+          name?: string;
+          email?: string;
+          age?: string;
+          lat?: number;
+          lng?: number;
+        }
+      >,
+      res: Response<ApiResponse<{ user?: any; error?: any }>>,
     ) => {
-      const { name, email, age } = req.body;
+      const { name, email, age, lat, lng } = req.body;
 
       if (!name || !email || !age) {
         return res.status(400).json({
           status: "failed",
-          message: "Please provide the user name, email and age",
+          message: "Please provide the user name, email, age",
+        });
+      }
+
+      if ((lng && isNaN(Number(lng))) || (lat && isNaN(Number(lat)))) {
+        return res.status(400).json({
+          status: "failed",
+          message: "Invalid coordinates",
         });
       }
 
@@ -69,17 +105,37 @@ app
       }
 
       try {
-        const dbResult = await db
-          .insert(users)
-          .values({ name, email: email.toLowerCase(), age: Number(age) })
-          .returning();
+        // const dbResult = await db
+        //   .insert(users)
+        //   .values({
+        //     name,
+        //     email: email.toLowerCase(),
+        //     age: Number(age),
+        //     location:
+        //       lat && lng
+        //         ? { coordinates: { lat: Number(lat), lng: Number(lng) } }
+        //         : undefined,
+        //   })
+        //   .returning();
+
+        const dbResult = await db.execute(
+          sql`
+          INSERT INTO users (name, email, age, location)
+          VALUES (
+            ${name},
+            ${email},
+            ${Number(age)},
+            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
+            )`,
+        );
+        // sql`SELECT current_database(), current_schema()`,
 
         res.status(200).json({ status: "success", data: { user: dbResult } });
       } catch (error) {
         // console.error(error);
         res.status(400).json({ status: "failed", data: { error } });
       }
-    }
+    },
   );
 
 app
@@ -87,7 +143,7 @@ app
   .get(
     async (
       req: Request<{ id: string }>,
-      res: Response<ApiResponse<{ user: typeof users.$inferSelect }>>
+      res: Response<ApiResponse<{ user: typeof users.$inferSelect }>>,
     ) => {
       const id = req.params.id;
 
@@ -112,58 +168,7 @@ app
       }
 
       res.json({ status: "success", data: { user } });
-    }
-  );
-
-app
-  .route("/posts")
-  .get(async (req, res: Response<ApiResponse<{ posts: any }>>) => {
-    const dbPosts = await db
-      .select({ ...getTableColumns(posts), author: users })
-      .from(posts)
-      .leftJoin(users, eq(posts.authorId, users.id));
-
-    // const dbPosts = await db.query.posts.findMany({
-    //   with: {
-    //     users: { with: { preferences: { columns: { emailUpdates: true } } } },
-    //   },
-    // });
-
-    res.json({ status: "success", data: { posts: dbPosts } });
-  })
-  .post(
-    async (
-      req: Request<any, any, { authorId?: string; title?: string }>,
-      res: Response<
-        ApiResponse<{ post?: typeof posts.$inferInsert; error?: any }>
-      >
-    ) => {
-      const { authorId, title } = req.body ?? {};
-
-      if (isNaN(Number(authorId)))
-        return res.json({
-          status: "failed",
-          message: "Please provide a valid author id",
-        });
-      if (!title)
-        return res.json({
-          status: "failed",
-          message: "Please provide the post title",
-        });
-
-      try {
-        const newPost = (
-          await db
-            .insert(posts)
-            .values({ authorId: Number(authorId), title })
-            .returning()
-        )[0];
-
-        res.json({ status: "success", data: { post: newPost } });
-      } catch (error) {
-        res.json({ status: "failed", data: { error } });
-      }
-    }
+    },
   );
 
 app.listen(PORT, () => {

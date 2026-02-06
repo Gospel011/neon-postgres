@@ -1,5 +1,5 @@
 {
-  "extends": "@tsconfig/node22/tsconfig.json",
+  "extends": "@tsconfig/node24/tsconfig.json",
   "include": ["src/**/*.ts", "src/schema/shared/timestamps.js"],
   "exclude": ["dist"],
   "compilerOptions": {
@@ -11,7 +11,8 @@
       "@/*": ["*"],
       "@lib/*": ["lib/*"],
       "@controllers/*": ["controllers/*"],
-      "@db/*": ["db/*"]
+      "@db/*": ["db/*"],
+      "@logger": ["lib/logger.ts"]
     }
   }
 }

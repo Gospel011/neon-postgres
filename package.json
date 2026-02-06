@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsx watch src/server.ts --clear-screen=false"
+    "dev": "tsx watch src/server.ts --clear-screen=false",
+    "generate-migrations": "rm -rf dist && tsc && drizzle-kit generate --config=drizzle.config.ts",
+    "apply-migrations": "drizzle-kit migrate --config=drizzle.config.ts"
   },
   "keywords": [],
   "author": "",
@@ -17,10 +19,11 @@
     "drizzle-orm": "^0.45.1",
     "express": "^5.2.1",
     "morgan": "^1.10.1",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@tsconfig/node22": "^22.0.5",
+    "@tsconfig/node24": "^24.0.4",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/morgan": "^1.9.10",
