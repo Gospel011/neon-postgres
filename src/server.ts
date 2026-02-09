@@ -7,7 +7,8 @@ import getLANIP from "./utils/get_lan_ip.js";
 import db from "./db/db.js";
 import { users } from "./schema/schema.js";
 import { eq, getTableColumns, sql } from "drizzle-orm";
-// import db from "@db/db.js";
+import { CreateUserData, userSchema } from "./schema/zod_schema/user.js";
+import { ZodError } from "zod";
 
 const app = express();
 
@@ -30,8 +31,6 @@ app
       const limit = 5;
       const offset = (Math.max(Number(page ?? 1), 1) - 1) * limit;
 
-      // const dbUsers = await db.select().from(users);
-      // const hasValidCoordinates = !isNaN(Number(lat)) && !isNaN(Number(lng));
       const dbUsers = await db.execute<User>(
         sql`
         SELECT 
@@ -53,8 +52,6 @@ app
       );
 
       try {
-        //   ).rows;
-
         res.json({
           status: "success",
           message: "Application is live",
@@ -68,55 +65,13 @@ app
   )
   .post(
     async (
-      req: Request<
-        any,
-        any,
-        {
-          name?: string;
-          email?: string;
-          age?: string;
-          lat?: number;
-          lng?: number;
-        }
-      >,
+      req: Request<any, any, CreateUserData>,
       res: Response<ApiResponse<{ user?: any; error?: any }>>,
     ) => {
-      const { name, email, age, lat, lng } = req.body;
-
-      if (!name || !email || !age) {
-        return res.status(400).json({
-          status: "failed",
-          message: "Please provide the user name, email, age",
-        });
-      }
-
-      if ((lng && isNaN(Number(lng))) || (lat && isNaN(Number(lat)))) {
-        return res.status(400).json({
-          status: "failed",
-          message: "Invalid coordinates",
-        });
-      }
-
-      if (isNaN(Number(age))) {
-        return res.status(400).json({
-          status: "failed",
-          message: "Please provide a valid age",
-        });
-      }
-
       try {
-        // const dbResult = await db
-        //   .insert(users)
-        //   .values({
-        //     name,
-        //     email: email.toLowerCase(),
-        //     age: Number(age),
-        //     location:
-        //       lat && lng
-        //         ? { coordinates: { lat: Number(lat), lng: Number(lng) } }
-        //         : undefined,
-        //   })
-        //   .returning();
+        const { name, email, age, lat, lng } = userSchema.parse(req.body, {
+          error: () => "Please provide the required parameters",
+        });
 
         const dbResult = await db.execute(
           sql`
@@ -128,12 +83,21 @@ app
             ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography
             )`,
         );
-        // sql`SELECT current_database(), current_schema()`,
 
         res.status(200).json({ status: "success", data: { user: dbResult } });
       } catch (error) {
-        // console.error(error);
-        res.status(400).json({ status: "failed", data: { error } });
+        console.error(error);
+
+        if (error instanceof ZodError) {
+          return res.status(400).json({
+            status: "failed",
+            message: error.issues?.at(0)?.message,
+          });
+        }
+        res.status(400).json({
+          status: "failed",
+          message: "Something went wrong, please try again later.",
+        });
       }
     },
   );
@@ -158,8 +122,6 @@ app
           .from(users)
           .where(eq(users.id, Number(id)))
       )[0];
-
-      // const user = rows[0];
 
       if (!user) {
         return res
